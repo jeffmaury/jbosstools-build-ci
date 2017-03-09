@@ -19,7 +19,7 @@ from optparse import OptionParser
 # ref: http://stackoverflow.com/questions/12609402/init-got-an-unexpected-keyword-argument-mime-in-python-django
 
 usage = "Usage: %prog -u <user> -p <pass> -s <JIRA server> --jbide <jbideversion> --jbds <jbdsversion> -b <branch> \
--t <short task summary> -f <full detailed task description>\n\nThis script will create 1 JBDS and 1 JBIDE JIRA with the specified task summary + description, \
+-t <short task summary> -f <full detailed task description> [-r (dryrun mode)]\n\nThis script will create 1 JBDS and 1 JBIDE JIRA with the specified task summary + description, \
 then create \nsub-tasks of the JBIDE JIRA for each of the JBIDE components with matching Github jbosstools-* repos"
 parser = OptionParser(usage)
 parser.add_option("-u", "--user", dest="usernameJIRA", help="JIRA Username")
@@ -30,6 +30,7 @@ parser.add_option("-i", "--jbide", dest="jbidefixversion", help="JBIDE Fix Versi
 parser.add_option("-d", "--jbds", dest="jbdsfixversion", help="JBDS Fix Version, eg., 7.0.0.qualifier")
 parser.add_option("-t", "--task", dest="taskdescription", help="Task Summary, eg., \"Code Freeze + Branch\"")
 parser.add_option("-f", "--taskfull", dest="taskdescriptionfull", help="Task Description, eg., \"Please perform the following tasks...\"");
+parser.add_option("-r", "--dryrun", dest="dryrun",help="display only report, no JIRAs created",action="store_true");
 # see createTaskJIRAs.py.examples.txt for examples of taskdescriptionfull
 
 (options, args) = parser.parse_args()
@@ -70,33 +71,34 @@ if checkFixVersionsExist(jbide_fixversion, jbds_fixversion, jiraserver, options.
 		'components' : [{ "name" : "installer" }],
 		'labels' : [ "task" ],
 		}
-	rootJBDS = jira.create_issue(fields=rootJBDS_dict)
-	componentLead = defaultAssignee()
-	try:
-		jira.assign_issue(rootJBDS, componentLead)
-	except:
-		print "[WARNING] Unexpected error! User {0} tried to assign {1} to {2}: {3}".format(options.usernameJIRA, rootJBDS, componentLead, sys.exc_info()[0])
-	print("Task JIRA created for this milestone include:")
-	print("")
+	if not options.dryrun:
+		rootJBDS = jira.create_issue(fields=rootJBDS_dict)
+		componentLead = defaultAssignee()
+		try:
+			jira.assign_issue(rootJBDS, componentLead)
+		except:
+			print "[WARNING] Unexpected error! User {0} tried to assign {1} to {2}: {3}".format(options.usernameJIRA, rootJBDS, componentLead, sys.exc_info()[0])
+		print("Task JIRA created for this milestone include:")
+		print("")
 
-	print("JBDS              : " + jiraserver + '/browse/' + rootJBDS.key + " => " + componentLead)
+		print("JBDS              : " + jiraserver + '/browse/' + rootJBDS.key + " => " + componentLead)
 
-	rootJBIDE_dict = {
-		'project' : { 'key': 'JBIDE' },
-		'summary' : 'For JBIDE ' + jbide_fixversion + ': ' + taskdescription,
-		'description' : 'For JBIDE ' + jbide_fixversion + ': ' + taskdescriptionfull + '\n\n[Search for all task JIRA|' + tasksearch + ']\n\nSee also: ' + rootJBDS.key,
-		'issuetype' : { 'name' : 'Task' },
-		'priority' : { 'name' :'Blocker'},
-		'fixVersions' : [{ "name" : jbide_fixversion }],
-		'components' : [{ "name" : "build" }],
-		'labels' : [ "task" ]
-		}
-	rootJBIDE = jira.create_issue(fields=rootJBIDE_dict)
-	try:
-		jira.assign_issue(rootJBIDE, componentLead)
-	except:
-		print "[WARNING] Unexpected error! User {0} tried to assign {1} to {2}: {3}".format(options.usernameJIRA, rootJBIDE, componentLead, sys.exc_info()[0])
-	print("JBoss Tools       : " + jiraserver + '/browse/' + rootJBIDE.key + " => " + componentLead + "")
+		rootJBIDE_dict = {
+			'project' : { 'key': 'JBIDE' },
+			'summary' : 'For JBIDE ' + jbide_fixversion + ': ' + taskdescription,
+			'description' : 'For JBIDE ' + jbide_fixversion + ': ' + taskdescriptionfull + '\n\n[Search for all task JIRA|' + tasksearch + ']\n\nSee also: ' + rootJBDS.key,
+			'issuetype' : { 'name' : 'Task' },
+			'priority' : { 'name' :'Blocker'},
+			'fixVersions' : [{ "name" : jbide_fixversion }],
+			'components' : [{ "name" : "build" }],
+			'labels' : [ "task" ]
+			}
+		rootJBIDE = jira.create_issue(fields=rootJBIDE_dict)
+		try:
+			jira.assign_issue(rootJBIDE, componentLead)
+		except:
+			print "[WARNING] Unexpected error! User {0} tried to assign {1} to {2}: {3}".format(options.usernameJIRA, rootJBIDE, componentLead, sys.exc_info()[0])
+		print("JBoss Tools       : " + jiraserver + '/browse/' + rootJBIDE.key + " => " + componentLead + "")
 
 
 	# Currently, the repo url (for printing links to the missing commits)
@@ -144,30 +146,32 @@ if checkFixVersionsExist(jbide_fixversion, jbds_fixversion, jiraserver, options.
 			print output
 			comptasksearch = jiraserver + '/issues/?jql=' + urllib.quote_plus(tasksearchquery + " and component in (" + ",".join(map(quote,comps)) + ")")
 			
-			rootJBIDE_dict = {
-				'project' : { 'key': 'JBIDE' },
-				'summary' : 'For JBIDE ' + jbide_fixversion + ': ' + taskdescription + ' [' + name.strip() + ']',
-				'description' : 'For JBIDE ' + jbide_fixversion + ' [' + name.strip() + ']: ' + taskdescriptionfull + "\n\n" + output + 
-					'\n\n[Search for all task JIRA|' + tasksearch + '], or [Search for ' + name.strip() + ' task JIRA|' + comptasksearch + ']',
-				'issuetype' : { 'name' : 'Sub-task' },
-				'parent' : { 'id' : rootJBIDE.key},
-				'priority' : { 'name': 'Blocker'},
-				'components' : cms,
-				'labels' : [ "task" ]
-			}
 			os.chdir(workingdir)
 
-			child = jira.create_issue(fields=rootJBIDE_dict)
-			try:
-				jira.assign_issue(child, componentLead)
-			except:
-				print "[WARNING] Unexpected error! User {0} tried to assign {1} to {2}: {3}".format(options.usernameJIRA, child, componentLead, sys.exc_info()[0])
-			print(name +  ": " + jiraserver + '/browse/' + child.key + " => " + componentLead)
+			if not options.dryrun:
+				rootJBIDE_dict = {
+					'project' : { 'key': 'JBIDE' },
+					'summary' : 'For JBIDE ' + jbide_fixversion + ': ' + taskdescription + ' [' + name.strip() + ']',
+					'description' : 'For JBIDE ' + jbide_fixversion + ' [' + name.strip() + ']: ' + taskdescriptionfull + "\n\n" + output + 
+						'\n\n[Search for all task JIRA|' + tasksearch + '], or [Search for ' + name.strip() + ' task JIRA|' + comptasksearch + ']',
+						'issuetype' : { 'name' : 'Sub-task' },
+						'parent' : { 'id' : rootJBIDE.key},
+						'priority' : { 'name': 'Blocker'},
+						'components' : cms,
+						'labels' : [ "task" ]
+				}
+				child = jira.create_issue(fields=rootJBIDE_dict)
+				try:
+					jira.assign_issue(child, componentLead)
+				except:
+					print "[WARNING] Unexpected error! User {0} tried to assign {1} to {2}: {3}".format(options.usernameJIRA, child, componentLead, sys.exc_info()[0])
+				print(name +  ": " + jiraserver + '/browse/' + child.key + " => " + componentLead)
 
-	accept = raw_input("Accept created JIRAs? [Y/n] ")
+	if not options.dryrun:
+		accept = raw_input("Accept created JIRAs? [Y/n] ")
 
-	if accept.capitalize() in ["N"]:
-		rootJBIDE.delete(deleteSubtasks=True)
-		rootJBDS.delete(deleteSubtasks=True)
+		if accept.capitalize() in ["N"]:
+			rootJBIDE.delete(deleteSubtasks=True)
+			rootJBDS.delete(deleteSubtasks=True)
 
 	# For sample usage, see findlostpatches.py.examples.txt
