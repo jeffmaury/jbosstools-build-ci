@@ -109,8 +109,8 @@ for i in ${MAINTCOMMITS[@]}; do
     # if $BRANCH2 doesn't contain a matching commit, we should output this as a missing commit
     IFTEST=$(contains "${MASTERPATCHID[@]}" "$TEMPPATCHID")
     if [ $IFTEST == "y" ]; then :; else
-       echo "* missing: [$i|$REPOURL2$i]"
        COMMITMSG=`git log --format=%f -n 1 $i`
+       echo "* missing: [$i|$REPOURL2$i|$COMMITMSG]"
        git log $BRANCH2 --format='%H - %f' -n 1000 | grep $COMMITMSG | cut -f 1 -d " " \
        | awk -v originalid="$i" -v repo="$REPOURL2" '{ print "** possible match: [" $0 "|" repo $0 "]."; system("git show " originalid " > .testscript1"); system("git show " $0 " > .testscript2"); system("diff .testscript1 .testscript2 | curl -s -F \"sprunge=<-\" \"http://sprunge.us\"");}' | sed  -e 's/^http/\*\*\* Inspect the difference between the two patches:  http/'
     fi
