@@ -110,9 +110,9 @@ for i in ${MAINTCOMMITS[@]}; do
     IFTEST=$(contains "${MASTERPATCHID[@]}" "$TEMPPATCHID")
     if [ $IFTEST == "y" ]; then :; else
        COMMITMSG=`git log --format=%f -n 1 $i`
-       echo "* missing: [$i|$REPOURL2$i|$COMMITMSG]"
+       echo "* missing: $COMMITMSG $REPOURL2$i"
        git log $BRANCH2 --format='%H - %f' -n 1000 | grep $COMMITMSG | cut -f 1 -d " " \
-       | awk -v originalid="$i" -v repo="$REPOURL2" '{ print "** possible match: [" $0 "|" repo $0 "]."; system("git show " originalid " > .testscript1"); system("git show " $0 " > .testscript2"); system("diff .testscript1 .testscript2 | curl -s -F \"sprunge=<-\" \"http://sprunge.us\"");}' | sed  -e 's/^http/\*\*\* Inspect the difference between the two patches:  http/'
+       | awk -v originalid="$i" -v repo="$REPOURL2" '{ print "** possible match: " repo $0 ; system("git show " originalid " > .testscript1"); system("git show " $0 " > .testscript2"); system("diff .testscript1 .testscript2 | curl -s -F \"sprunge=<-\" \"http://sprunge.us\"");}' | sed  -e 's/^http/\*\*\* Inspect the difference between the two patches:  http/'
     fi
 done
 
